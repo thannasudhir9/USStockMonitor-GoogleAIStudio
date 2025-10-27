@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { ProcessedStockData, Currency, ConversionRates } from '../types';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { ProcessedStockData, Currency, ConversionRates, PriceAlert } from '../types';
 import { formatCurrency } from '../utils/currency';
 import { fetchHistoricalPrice } from '../services/geminiService';
 
@@ -9,6 +9,9 @@ interface StockDetailModalProps {
   onClose: () => void;
   currency: Currency;
   rates: ConversionRates | null;
+  activeAlert?: PriceAlert;
+  onSetAlert: (alert: PriceAlert) => void;
+  onRemoveAlert: (symbol: string) => void;
 }
 
 const ChangeIndicator: React.FC<{ value: number; label?: string; isTable?: boolean }> = ({ value, label, isTable = false }) => {
@@ -153,7 +156,77 @@ const HistoricalPriceLookup: React.FC<{ stock: ProcessedStockData; currency: Cur
     );
 };
 
-const SingleStockView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'comparisonList'>> = ({ stock, currency, rates }) => {
+const AlertManager: React.FC<{ 
+    stock: ProcessedStockData; 
+    activeAlert?: PriceAlert;
+    onSetAlert: (alert: PriceAlert) => void;
+    onRemoveAlert: (symbol: string) => void;
+    currency: Currency;
+    rates: ConversionRates | null;
+}> = ({ stock, activeAlert, onSetAlert, onRemoveAlert, currency, rates }) => {
+    const [targetPrice, setTargetPrice] = useState<string>(activeAlert?.targetPrice.toString() || '');
+    const [condition, setCondition] = useState<'above' | 'below'>(activeAlert?.condition || 'above');
+    
+    useEffect(() => {
+        setTargetPrice(activeAlert?.targetPrice.toString() || '');
+        setCondition(activeAlert?.condition || 'above');
+    }, [activeAlert]);
+
+    const handleSetAlert = () => {
+        const price = parseFloat(targetPrice);
+        if (!isNaN(price) && price > 0) {
+            onSetAlert({
+                symbol: stock.symbol,
+                targetPrice: price,
+                condition,
+            });
+        }
+    };
+
+    return (
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+             <h3 className="text-sm font-semibold uppercase text-gray-400 dark:text-gray-500 mb-3">Price Alert</h3>
+             {activeAlert ? (
+                <div className="bg-blue-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-800 dark:text-gray-200 text-center mb-3">
+                        Active alert: Notify when price is <span className="font-bold">{activeAlert.condition} {formatCurrency(activeAlert.targetPrice, currency, rates)}</span>
+                    </p>
+                    <button onClick={() => onRemoveAlert(stock.symbol)} className="w-full px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition-colors text-sm">
+                        Remove Alert
+                    </button>
+                </div>
+             ) : (
+                <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <select
+                        value={condition}
+                        onChange={(e) => setCondition(e.target.value as 'above' | 'below')}
+                        className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="above">Above</option>
+                        <option value="below">Below</option>
+                    </select>
+                    <input
+                        type="number"
+                        value={targetPrice}
+                        onChange={(e) => setTargetPrice(e.target.value)}
+                        placeholder={`e.g. ${(stock.price * 1.05).toFixed(2)}`}
+                        className="w-full sm:w-auto flex-grow px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Target price"
+                    />
+                    <button
+                        onClick={handleSetAlert}
+                        disabled={!targetPrice || parseFloat(targetPrice) <= 0}
+                        className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Set Alert
+                    </button>
+                </div>
+             )}
+        </div>
+    );
+}
+
+const SingleStockView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'comparisonList'>> = ({ stock, currency, rates, activeAlert, onSetAlert, onRemoveAlert }) => {
     if (!stock) return null;
     return (
         <>
@@ -181,6 +254,8 @@ const SingleStockView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'compari
                 <ChangeIndicator value={stock.change6m} label="6 Months" />
                 <ChangeIndicator value={stock.change1y} label="1 Year" />
             </div>
+
+            <AlertManager stock={stock} activeAlert={activeAlert} onSetAlert={onSetAlert} onRemoveAlert={onRemoveAlert} currency={currency} rates={rates} />
             
             <HistoricalPriceLookup stock={stock} currency={currency} rates={rates} />
         </>
@@ -302,7 +377,7 @@ const ComparisonView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'stock'>>
     );
 };
 
-const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, comparisonList, onClose, currency, rates }) => {
+const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, comparisonList, onClose, currency, rates, activeAlert, onSetAlert, onRemoveAlert }) => {
   const isComparisonMode = !!comparisonList && comparisonList.length > 0;
   
   return (
@@ -327,9 +402,9 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, comparisonLi
             </button>
 
             {isComparisonMode ? (
-                <ComparisonView comparisonList={comparisonList} currency={currency} rates={rates} />
+                <ComparisonView comparisonList={comparisonList} currency={currency} rates={rates} onSetAlert={onSetAlert} onRemoveAlert={onRemoveAlert} />
             ) : (
-                <SingleStockView stock={stock} currency={currency} rates={rates} />
+                <SingleStockView stock={stock} currency={currency} rates={rates} activeAlert={activeAlert} onSetAlert={onSetAlert} onRemoveAlert={onRemoveAlert} />
             )}
         </div>
       </div>

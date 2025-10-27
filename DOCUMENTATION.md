@@ -7,6 +7,7 @@ The application's source code is organized into a modular structure to promote s
 ```
 /
 ├── components/         # Reusable React components (UI elements)
+│   ├── AlertNotifications.tsx
 │   ├── CurrencySelector.tsx
 │   ├── DashboardHeader.tsx
 │   ├── DataSourceSelector.tsx
@@ -26,6 +27,7 @@ The application's source code is organized into a modular structure to promote s
 ├── services/           # Modules for external API interactions (Gemini)
 │   └── geminiService.ts
 ├── utils/              # Utility functions
+│   ├── alerts.ts
 │   ├── currency.ts
 │   └── export.ts
 ├── App.tsx             # Main application component, handles routing and layout
@@ -34,12 +36,12 @@ The application's source code is organized into a modular structure to promote s
 └── index.html          # The main HTML file
 ```
 
-- **`components/`**: Contains small, reusable UI components. For example, `ThemeToggle` and `ExportControls` are interactive UI elements.
+- **`components/`**: Contains small, reusable UI components. For example, `ThemeToggle` and `AlertNotifications` are interactive UI elements.
 - **`pages/`**: These components represent the main views of the application (e.g., Dashboard, Features). They are responsible for fetching data and managing the state for their respective views.
 - **`services/`**: Handles all communication with the Google Gemini API. This isolates API logic from the UI components.
-- **`utils/`**: Houses helper functions that can be used across the application, such as `formatCurrency` and `exportToCsv`.
+- **`utils/`**: Houses helper functions that can be used across the application, such as `formatCurrency`, `exportToCsv`, and all price alert logic.
 - **`App.tsx`**: The root component. It manages the global state like the current theme, currency, and active page, acting as a simple router.
-- **`types.ts`**: Defines the data structures (`StockData`, `DataSource`, etc.) used throughout the app, ensuring type safety.
+- **`types.ts`**: Defines the data structures (`StockData`, `PriceAlert`, etc.) used throughout the app, ensuring type safety.
 
 ## 2. Core Components & Logic
 
@@ -47,20 +49,20 @@ The application's source code is organized into a modular structure to promote s
 - **Role**: The primary interactive view of the application.
 - **State Management**: This is the most stateful component, managing:
     - `stocks`: The raw and processed data for all stocks.
+    - `activeAlerts`, `triggeredAlerts`: State for the price alert system.
     - `isLoading`, `error`: API request status.
     - `sortConfig`: The current sorting state of the table.
-    - `searchQuery`: The value of the filter input.
-    - `selectedStock`: Manages which stock is selected to be shown in the detail modal.
-    - `dataSource`: The selected source for stock data (e.g., 'Google Finance').
 - **Data Processing**:
     - **Momentum Score**: `calculateMomentumScore` computes a weighted average of recent performance metrics to create a normalized 0-100 score.
     - **Volatility**: `calculateVolatility` calculates the standard deviation of performance metrics to categorize risk.
+    - **Price Alerts**: On data load, it calls `checkAlerts` from `utils/alerts.ts` to determine if any alerts have been triggered.
 
 ### `components/StockDetailModal.tsx`
 - **Role**: Provides a detailed view of a single stock.
 - **Features**:
     - **Sparkline Chart**: A custom SVG chart visualizes the 1-year performance trend.
-    - **Historical Price Lookup**: Implements a date picker and a handler (`handleFetchPrice`) that calls the `fetchHistoricalPrice` service to get data for a specific day and displays the result.
+    - **Historical Price Lookup**: Implements a date picker and a handler that calls the `fetchHistoricalPrice` service.
+    - **Alert Manager**: A dedicated UI section for users to set, view, update, and remove price alerts for the specific stock.
 
 ## 3. Gemini API Integration (`services/geminiService.ts`)
 
@@ -82,11 +84,13 @@ The application relies on the Google Gemini API for all its data.
 
 ## 4. Key Feature Implementations
 
-### Data Source Selection
-1. The `DataSourceSelector` component allows the user to pick from 'Gemini', 'Google Finance', or 'Yahoo Finance'.
-2. The selection is stored in the `dataSource` state within `DashboardPage`.
-3. When `loadStockData` is called, it passes the `dataSource` to `fetchHighGrowthStocks`.
-4. The `geminiService` modifies the prompt to the API based on the source, influencing the data returned by the model.
+### Price Alert System
+1.  **Storage (`utils/alerts.ts`)**: All alert logic is encapsulated in this module. Functions like `getAlerts`, `saveAlerts`, `addOrUpdateAlert`, and `removeAlert` handle all interactions with `localStorage`, providing a clean API for the rest of the app.
+2.  **Setting Alerts (`StockDetailModal.tsx`)**: The `AlertManager` component within the modal provides the UI for creating or deleting an alert. State changes are propagated up to `DashboardPage`.
+3.  **State Management (`DashboardPage.tsx`)**: The main dashboard page holds the `activeAlerts` in its state. When a user modifies an alert, handlers update this state and call the save functions from `utils/alerts.ts`.
+4.  **Checking Alerts (`DashboardPage.tsx`)**: After every successful data fetch, the new stock prices are passed to `checkAlerts` along with the list of `activeAlerts`.
+5.  **Notifications (`AlertNotifications.tsx`)**: The `checkAlerts` function returns any triggered alerts. These are set in the `triggeredAlerts` state on `DashboardPage`, which causes the `AlertNotifications` component to render dismissible toast notifications. The triggered alerts are then removed from `localStorage`.
+6.  **UI Indicators (`StockTable.tsx`)**: A memoized selector in `DashboardPage` adds a `hasActiveAlert` flag to each stock object, which the `StockTable` uses to conditionally render a bell icon.
 
 ### Data Exporting
 - **CSV Export**:

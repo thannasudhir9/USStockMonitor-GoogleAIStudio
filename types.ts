@@ -10,10 +10,17 @@ export interface StockData {
   lastTradeDate?: string;
 }
 
+export interface PriceAlert {
+  symbol: string;
+  targetPrice: number;
+  condition: 'above' | 'below';
+}
+
 export interface ProcessedStockData extends StockData {
   initialRank: number;
   momentumScore: number;
   volatilityLabel: 'Low' | 'Medium' | 'High';
+  hasActiveAlert?: boolean;
 }
 
 export type SortableKey = 'initialRank' | 'symbol' | 'price' | 'change1w' | 'change1m' | 'change3m' | 'change6m' | 'change1y';

@@ -177,8 +177,13 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onR
                   className="py-4 px-4 font-medium text-gray-900 dark:text-white cursor-pointer"
                   onClick={() => onRowClick(stock)}
                 >
-                  <div className="text-base">{stock.symbol}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{stock.name}</div>
+                  <div className="flex items-center">
+                    <div>
+                      <div className="text-base">{stock.symbol}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{stock.name}</div>
+                    </div>
+                    {stock.hasActiveAlert && <span className="ml-2 text-yellow-500" title="Price alert is active">🔔</span>}
+                  </div>
                 </td>
                 <td 
                   className="py-4 px-4 text-right font-mono text-gray-900 dark:text-white cursor-pointer"

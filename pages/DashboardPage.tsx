@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { StockData, ProcessedStockData, SortableKey, SummaryStats, Currency, ConversionRates, DataSource } from '../types';
+import { StockData, ProcessedStockData, SortableKey, SummaryStats, Currency, ConversionRates, DataSource, PriceAlert } from '../types';
 import { fetchHighGrowthStocks, fetchConversionRates } from '../services/geminiService';
 import { exportToCsv } from '../utils/export';
+import { getAlerts, checkAlerts, addOrUpdateAlert, removeAlert, saveAlerts } from '../utils/alerts';
 import StockTable from '../components/StockTable';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorDisplay from '../components/ErrorDisplay';
@@ -11,6 +12,7 @@ import StockCountSelector from '../components/StockCountSelector';
 import TableSkeleton from '../components/TableSkeleton';
 import DataSourceSelector from '../components/DataSourceSelector';
 import ExportControls from '../components/ExportControls';
+import AlertNotifications from '../components/AlertNotifications';
 
 interface DashboardPageProps {
     currency: Currency;
@@ -75,6 +77,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortConfig, setSortConfig] = useState<{ key: SortableKey; direction: 'asc' | 'dsc' }>({ key: 'initialRank', direction: 'asc' });
   const [modalContent, setModalContent] = useState<{ stock?: ProcessedStockData; comparisonList?: ProcessedStockData[] } | null>(null);
+  const [activeAlerts, setActiveAlerts] = useState<PriceAlert[]>([]);
+  const [triggeredAlerts, setTriggeredAlerts] = useState<{ alert: PriceAlert; stock: ProcessedStockData }[]>([]);
   const [stockCount, setStockCount] = useState<number>(() => {
     const savedCount = localStorage.getItem('stockCount');
     return savedCount ? parseInt(savedCount, 10) : 25;
@@ -83,6 +87,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     const savedSource = localStorage.getItem('dataSource');
     return (savedSource as DataSource) || 'Gemini';
   });
+
+  useEffect(() => {
+    setActiveAlerts(getAlerts());
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('stockCount', String(stockCount));
@@ -95,7 +103,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
   const loadStockData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setComparisonList([]); // Clear comparison on refresh
+    if (!stocks) { // Only clear comparison on first load, not refresh
+        setComparisonList([]);
+    }
     try {
       const [stockData, ratesData] = await Promise.all([
           fetchHighGrowthStocks(stockCount, dataSource),
@@ -114,6 +124,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
         volatilityLabel: volatilities[index]?.label ?? 'Medium',
       }));
 
+      // Check for triggered alerts
+      const currentAlerts = getAlerts();
+      const { triggered, remaining } = checkAlerts(processedData, currentAlerts);
+      if (triggered.length > 0) {
+        setTriggeredAlerts(prev => [...prev, ...triggered]);
+        setActiveAlerts(remaining);
+        saveAlerts(remaining);
+      }
+
       setStocks(processedData);
     } catch (err) {
       if (err instanceof Error) {
@@ -124,18 +143,27 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [stockCount, dataSource]);
+  }, [stockCount, dataSource, stocks]);
 
   useEffect(() => {
     loadStockData();
   }, [loadStockData]);
 
-  const filteredStocks = useMemo(() => stocks
-    ? stocks.filter(stock =>
+  const stocksWithAlerts = useMemo(() => {
+    if (!stocks) return null;
+    const alertSymbols = new Set(activeAlerts.map(a => a.symbol));
+    return stocks.map(stock => ({
+        ...stock,
+        hasActiveAlert: alertSymbols.has(stock.symbol),
+    }));
+  }, [stocks, activeAlerts]);
+
+  const filteredStocks = useMemo(() => stocksWithAlerts
+    ? stocksWithAlerts.filter(stock =>
         stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         stock.symbol.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : null, [stocks, searchQuery]);
+    : null, [stocksWithAlerts, searchQuery]);
 
   const handleSort = (key: SortableKey) => {
     let direction: 'asc' | 'dsc' = 'asc';
@@ -214,6 +242,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     }
   };
 
+  const handleSetAlert = (alert: PriceAlert) => {
+    addOrUpdateAlert(alert);
+    setActiveAlerts(getAlerts());
+  };
+
+  const handleRemoveAlert = (symbol: string) => {
+    removeAlert(symbol);
+    setActiveAlerts(getAlerts());
+  };
+
+  const handleDismissAlert = (symbol: string) => {
+    setTriggeredAlerts(prev => prev.filter(a => a.alert.symbol !== symbol));
+  };
+
   const renderContent = () => {
     if (isLoading && !stocks) {
       return <LoadingSpinner />;
@@ -244,6 +286,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
 
   return (
     <>
+      <AlertNotifications
+          triggeredAlerts={triggeredAlerts}
+          onDismiss={handleDismissAlert}
+          currency={currency}
+          rates={conversionRates}
+      />
       <DashboardHeader stats={summaryStats} />
       <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6 no-print">
          <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
@@ -294,6 +342,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
           onClose={() => setModalContent(null)} 
           currency={currency}
           rates={conversionRates}
+          activeAlert={activeAlerts.find(a => a.symbol === modalContent.stock?.symbol)}
+          onSetAlert={handleSetAlert}
+          onRemoveAlert={handleRemoveAlert}
         />
       )}
     </>

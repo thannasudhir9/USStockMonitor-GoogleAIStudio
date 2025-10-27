@@ -124,6 +124,17 @@ This document provides a chronological history of the development of the US Stoc
 
 ---
 
+**Date:** 2024-07-29 12:30:00
+**User Prompt:** "In the StockTable component, add a new column at the beginning called '#' that displays a serial number... Ensure this column is not sortable." and "In the StockTable component, add a new column at the beginning with checkboxes... Add a 'Compare Selected' button... This button should open the StockDetailModal in a new comparison mode... add a sort to the serial number #"
+**Solution:**
+- Combined and reconciled the conflicting requests for the '#' column. The final implementation makes the '#' a stable, sortable rank based on the initial data fetch order.
+- Added a new checkbox column to the `StockTable` for multi-stock selection.
+- Implemented a contextual "Compare Selected" button on the `DashboardPage`.
+- Heavily refactored `StockDetailModal` to support a new "Comparison Mode". This mode features a multi-line performance chart, a color-coded legend, and a side-by-side data table for direct comparison of selected stocks.
+- **Files Updated:** `types.ts`, `pages/DashboardPage.tsx`, `components/StockTable.tsx`, `components/StockDetailModal.tsx`.
+
+---
+
 **Date:** 2024-07-29 12:45:00
 **User Prompt:** "add option to show in USD, EUR, INR on top right"
 **Solution:**
@@ -148,7 +159,7 @@ This document provides a chronological history of the development of the US Stoc
 ---
 
 **Date:** 2024-07-29 13:15:00
-**User Prompt:** "add a realtime connector like google, yahoo, tradingview... add a export button to export and download as csv excel file and also save a copy to google sheets add a button to download pdf of the whole page"
+**User Prompt:** "add a realtime connector like google, yahoo, tradingview... add a export button to export and download as csv excel file... add a button to download pdf of the whole page"
 **Solution:**
 - Implemented a "Data Source" selector allowing users to choose between Gemini, Google Finance, and Yahoo Finance. This modifies the prompt to the Gemini model to simulate data from the selected source.
 - Added an "Export" dropdown with two options:
@@ -158,3 +169,15 @@ This document provides a chronological history of the development of the US Stoc
 - **Files Created:** `utils/export.ts`, `components/DataSourceSelector.tsx`, `components/ExportControls.tsx`.
 
 ---
+
+**Date:** 2024-07-29 13:45:00
+**User Prompt:** "Implement a feature... that allows users to set custom price alerts for individual stocks... When a stock's price crosses a user-defined threshold... notify the user. Store these alerts using localStorage."
+**Solution:**
+- Implemented a complete price alert system with `localStorage` persistence.
+- Created a new `utils/alerts.ts` module to handle all alert logic (get, save, check).
+- Added an "Alert Manager" UI to the `StockDetailModal` for setting, updating, and removing alerts.
+- Added a bell icon (🔔) indicator in the `StockTable` for stocks with active alerts.
+- Created a new `AlertNotifications` component to display dismissible toast notifications when an alert is triggered on a data refresh.
+- Integrated the entire system into `DashboardPage` for state management and alert checking.
+- **Files Updated:** `types.ts`, `pages/DashboardPage.tsx`, `components/StockTable.tsx`, `components/StockDetailModal.tsx`, `README.md`, `DOCUMENTATION.md`, `PROMPTS_AND_SOLUTIONS.md`.
+- **Files Created:** `utils/alerts.ts`, `components/AlertNotifications.tsx`.

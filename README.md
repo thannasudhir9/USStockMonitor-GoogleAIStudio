@@ -9,6 +9,7 @@ This tool is built to be intuitive for both casual observers and serious analyst
 ## Key Features
 
 - **Dynamic Data Dashboard**: View a curated list of top-performing US stocks with key metrics.
+- **Custom Price Alerts**: Set custom price targets for any stock and receive notifications when the price crosses your threshold. Alerts are saved in your browser for your next session.
 - **Selectable Data Source**: Choose your preferred data source (Gemini, Google Finance, Yahoo Finance) to tailor the information presented.
 - **Customizable Data Views**: Select the number of stocks to display (Top 5, 10, 25, 50, or 100) to tailor the dashboard to your needs.
 - **Advanced Sorting & Filtering**: Instantly sort the table by any performance metric or use the search bar to filter by company name or stock symbol.
