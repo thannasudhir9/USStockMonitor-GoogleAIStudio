@@ -1,0 +1,5 @@
+{
+  "name": "US Stocks Monitor",
+  "description": "A web application to monitor the top 50 performing US stocks that have gained over 50% in the last 6 months, providing key financial metrics and performance data.",
+  "requestFramePermissions": []
+}
