@@ -12,6 +12,9 @@ const SkeletonRow: React.FC = () => (
         <td className="py-4 px-4 text-right">
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 ml-auto"></div>
         </td>
+        <td className="py-4 px-4 text-right">
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 ml-auto"></div>
+        </td>
         {[...Array(5)].map((_, i) => (
              <td key={i} className="py-4 px-4 text-right">
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16 ml-auto"></div>
@@ -32,12 +35,13 @@ const SkeletonRow: React.FC = () => (
 const TableSkeleton: React.FC = () => {
     return (
       <div className="w-full overflow-x-auto">
-        <table className="w-full min-w-[1050px] text-left">
+        <table className="w-full min-w-[1200px] text-left">
           <thead className="border-b border-gray-200 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400">
              <tr>
                 <th className="py-3 px-4 text-left uppercase tracking-wider">#</th>
                 <th className="py-3 px-4 text-left uppercase tracking-wider">Stock</th>
                 <th className="py-3 px-4 text-right uppercase tracking-wider">Price</th>
+                <th className="py-3 px-4 text-right uppercase tracking-wider">Last Updated</th>
                 <th className="py-3 px-4 text-right uppercase tracking-wider">1W %</th>
                 <th className="py-3 px-4 text-right uppercase tracking-wider">1M %</th>
                 <th className="py-3 px-4 text-right uppercase tracking-wider">3M %</th>

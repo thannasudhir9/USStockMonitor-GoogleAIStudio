@@ -37,6 +37,22 @@
         },
       }
     </script>
+    <style>
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        body, main {
+          padding: 0 !important;
+          margin: 0 !important;
+          background-color: #fff !important;
+        }
+        .printable-table {
+          box-shadow: none !important;
+          border: 1px solid #ccc;
+        }
+      }
+    </style>
   <script type="importmap">
 {
   "imports": {

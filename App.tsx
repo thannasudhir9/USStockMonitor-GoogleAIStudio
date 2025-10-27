@@ -55,7 +55,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans p-4 sm:p-6 lg:p-8 transition-colors duration-300">
       <main className="max-w-7xl mx-auto">
-        <header className="relative mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <header className="relative mb-8 flex flex-col md:flex-row justify-between items-center gap-4 no-print">
           <div className="text-center md:text-left">
              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
               US Stocks Monitor
@@ -70,7 +70,7 @@ const App: React.FC = () => {
         
         {renderContent()}
 
-        <footer className="text-center mt-12 text-gray-500 dark:text-gray-500 text-sm">
+        <footer className="text-center mt-12 text-gray-500 dark:text-gray-500 text-sm no-print">
             <p>Data provided by Gemini. This is not financial advice. Information may not be real-time.</p>
         </footer>
       </main>

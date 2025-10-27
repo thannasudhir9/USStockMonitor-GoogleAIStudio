@@ -4,15 +4,25 @@ import { formatCurrency } from '../utils/currency';
 import { fetchHistoricalPrice } from '../services/geminiService';
 
 interface StockDetailModalProps {
-  stock: ProcessedStockData;
+  stock?: ProcessedStockData;
+  comparisonList?: ProcessedStockData[];
   onClose: () => void;
   currency: Currency;
   rates: ConversionRates | null;
 }
 
-const ChangeIndicator: React.FC<{ value: number; label: string }> = ({ value, label }) => {
+const ChangeIndicator: React.FC<{ value: number; label?: string; isTable?: boolean }> = ({ value, label, isTable = false }) => {
     const isPositive = value >= 0;
     const colorClass = isPositive ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+    
+    if (isTable) {
+        return (
+            <span className={`font-mono font-semibold ${colorClass}`}>
+                {isPositive ? '+' : '-'}{Math.abs(value).toFixed(2)}%
+            </span>
+        );
+    }
+
     return (
         <div className="flex justify-between items-baseline">
             <span className="text-sm text-gray-500 dark:text-gray-400">{label}</span>
@@ -143,33 +153,15 @@ const HistoricalPriceLookup: React.FC<{ stock: ProcessedStockData; currency: Cur
     );
 };
 
-
-const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, onClose, currency, rates }) => {
-  return (
-    <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="stock-modal-title"
-    >
-      <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-auto transition-transform transform scale-95 animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-6">
+const SingleStockView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'comparisonList'>> = ({ stock, currency, rates }) => {
+    if (!stock) return null;
+    return (
+        <>
             <div className="flex justify-between items-start mb-4">
                 <div>
                     <h2 id="stock-modal-title" className="text-2xl font-bold text-gray-900 dark:text-white">{stock.symbol}</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{stock.name}</p>
                 </div>
-                <button
-                    onClick={onClose}
-                    aria-label="Close modal"
-                    className="p-1 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
             </div>
             
             <div className="mb-6 text-right">
@@ -191,6 +183,154 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, onClose, cur
             </div>
             
             <HistoricalPriceLookup stock={stock} currency={currency} rates={rates} />
+        </>
+    );
+};
+
+const ComparisonChart: React.FC<{ list: ProcessedStockData[]; currency: Currency; rates: ConversionRates | null }> = ({ list, currency, rates }) => {
+    const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+
+    const { paths, min, max } = useMemo(() => {
+        let globalMin = Infinity;
+        let globalMax = -Infinity;
+
+        const allDataSeries = list.map(stock => {
+            const now = stock.price;
+            const data = [
+                now / (1 + stock.change1y / 100),
+                now / (1 + stock.change6m / 100),
+                now / (1 + stock.change3m / 100),
+                now / (1 + stock.change1m / 100),
+                now / (1 + stock.change1w / 100),
+                now,
+            ];
+            globalMin = Math.min(globalMin, ...data);
+            globalMax = Math.max(globalMax, ...data);
+            return data;
+        });
+        
+        const range = globalMax - globalMin === 0 ? 1 : globalMax - globalMin;
+        const width = 400;
+        const height = 150;
+        const paddingY = 20;
+
+        const chartPaths = allDataSeries.map(series => {
+            const points = series.map((d, i) => {
+                const x = (i / (series.length - 1)) * width;
+                const y = (height - paddingY) - ((d - globalMin) / range) * (height - (2 * paddingY));
+                return `${x},${y}`;
+            });
+            return `M ${points.join(' L ')}`;
+        });
+        
+        return { paths: chartPaths, min: globalMin, max: globalMax };
+    }, [list]);
+
+    return (
+        <div className="w-full relative pl-16">
+            <svg viewBox={`0 0 400 150`} className="w-full h-auto overflow-visible">
+                {paths.map((pathD, index) => (
+                    <path key={index} d={pathD} fill="none" strokeWidth="2" stroke={CHART_COLORS[index % CHART_COLORS.length]} />
+                ))}
+            </svg>
+            <div className="absolute left-0 -top-1 -bottom-1 flex flex-col justify-between text-xs text-gray-400 font-mono py-1">
+                <span className="text-right w-14">{formatCurrency(max, currency, rates)}</span>
+                <span className="text-right w-14">{formatCurrency(min, currency, rates)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>1 Year Ago</span>
+                <span>Today</span>
+            </div>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3">
+                {list.map((stock, index) => (
+                    <div key={stock.symbol} className="flex items-center text-xs">
+                        <span className="w-3 h-3 rounded-full mr-1.5" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></span>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">{stock.symbol}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const ComparisonView: React.FC<Omit<StockDetailModalProps, 'onClose' | 'stock'>> = ({ comparisonList, currency, rates }) => {
+    if (!comparisonList) return null;
+    const metrics: { label: string; key: keyof ProcessedStockData }[] = [
+        { label: `Price (${currency})`, key: 'price'},
+        { label: '1W %', key: 'change1w' },
+        { label: '1M %', key: 'change1m' },
+        { label: '3M %', key: 'change3m' },
+        { label: '6M %', key: 'change6m' },
+        { label: '1Y %', key: 'change1y' },
+        { label: 'Momentum', key: 'momentumScore' }
+    ];
+
+    return (
+        <>
+            <div className="flex justify-between items-start mb-4">
+                <h2 id="stock-modal-title" className="text-2xl font-bold text-gray-900 dark:text-white">Compare Stocks</h2>
+            </div>
+            <div className="mb-6">
+                <h3 className="text-sm font-semibold uppercase text-gray-400 dark:text-gray-500 mb-2">1-Year Performance Comparison</h3>
+                <ComparisonChart list={comparisonList} currency={currency} rates={rates} />
+            </div>
+            <div className="w-full overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase">
+                        <tr>
+                            <th scope="col" className="py-2 px-2">Metric</th>
+                            {comparisonList.map(stock => <th key={stock.symbol} scope="col" className="py-2 px-2 text-right">{stock.symbol}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {metrics.map(metric => (
+                            <tr key={metric.key}>
+                                <td className="py-2 px-2 font-medium text-gray-600 dark:text-gray-300">{metric.label}</td>
+                                {comparisonList.map(stock => (
+                                    <td key={stock.symbol} className="py-2 px-2 text-right">
+                                        {metric.key === 'price' ? formatCurrency(stock.price, currency, rates) :
+                                         metric.key === 'momentumScore' ? stock.momentumScore.toFixed(0) :
+                                         <ChangeIndicator value={stock[metric.key] as number} isTable={true} />}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </>
+    );
+};
+
+const StockDetailModal: React.FC<StockDetailModalProps> = ({ stock, comparisonList, onClose, currency, rates }) => {
+  const isComparisonMode = !!comparisonList && comparisonList.length > 0;
+  
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="stock-modal-title"
+    >
+      <div
+        className={`bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full mx-auto transition-transform transform scale-95 animate-scale-in ${isComparisonMode ? 'max-w-3xl' : 'max-w-md'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6 relative">
+             <button
+                onClick={onClose}
+                aria-label="Close modal"
+                className="absolute top-4 right-4 p-1 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            {isComparisonMode ? (
+                <ComparisonView comparisonList={comparisonList} currency={currency} rates={rates} />
+            ) : (
+                <SingleStockView stock={stock} currency={currency} rates={rates} />
+            )}
         </div>
       </div>
     </div>

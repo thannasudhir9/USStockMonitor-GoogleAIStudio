@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { StockData, ConversionRates } from '../types';
+import { StockData, ConversionRates, DataSource } from '../types';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -19,9 +19,13 @@ const stockDataSchema = {
      required: ['symbol', 'name', 'price', 'change1w', 'change1m', 'change3m', 'change6m', 'change1y', 'lastTradeDate'],
 };
 
-export async function fetchHighGrowthStocks(count: number = 25): Promise<StockData[]> {
+export async function fetchHighGrowthStocks(count: number = 25, dataSource: DataSource = 'Gemini'): Promise<StockData[]> {
+    const sourceInstruction = dataSource === 'Gemini'
+        ? 'Using the latest available data'
+        : `Using the latest available data as would be found on ${dataSource}`;
+
     const prompt = `
-        Using the latest available data, generate a list of exactly ${count} US stocks whose value has increased by more than 50% in the last 6 months.
+        ${sourceInstruction}, generate a list of exactly ${count} US stocks whose value has increased by more than 50% in the last 6 months.
         For each stock, provide the following information:
         - Stock ticker symbol
         - Company name

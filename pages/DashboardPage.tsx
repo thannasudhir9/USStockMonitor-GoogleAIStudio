@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { StockData, ProcessedStockData, SortableKey, SummaryStats, Currency, ConversionRates } from '../types';
+import { StockData, ProcessedStockData, SortableKey, SummaryStats, Currency, ConversionRates, DataSource } from '../types';
 import { fetchHighGrowthStocks, fetchConversionRates } from '../services/geminiService';
+import { exportToCsv } from '../utils/export';
 import StockTable from '../components/StockTable';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorDisplay from '../components/ErrorDisplay';
@@ -8,6 +9,8 @@ import StockDetailModal from '../components/StockDetailModal';
 import DashboardHeader from '../components/DashboardHeader';
 import StockCountSelector from '../components/StockCountSelector';
 import TableSkeleton from '../components/TableSkeleton';
+import DataSourceSelector from '../components/DataSourceSelector';
+import ExportControls from '../components/ExportControls';
 
 interface DashboardPageProps {
     currency: Currency;
@@ -65,27 +68,37 @@ const calculateVolatility = (stocks: StockData[]): { label: 'Low' | 'Medium' | '
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
   const [stocks, setStocks] = useState<ProcessedStockData[] | null>(null);
+  const [comparisonList, setComparisonList] = useState<string[]>([]);
   const [conversionRates, setConversionRates] = useState<ConversionRates | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortConfig, setSortConfig] = useState<{ key: SortableKey; direction: 'asc' | 'dsc' }>({ key: 'change6m', direction: 'dsc' });
-  const [selectedStock, setSelectedStock] = useState<ProcessedStockData | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: SortableKey; direction: 'asc' | 'dsc' }>({ key: 'initialRank', direction: 'asc' });
+  const [modalContent, setModalContent] = useState<{ stock?: ProcessedStockData; comparisonList?: ProcessedStockData[] } | null>(null);
   const [stockCount, setStockCount] = useState<number>(() => {
     const savedCount = localStorage.getItem('stockCount');
     return savedCount ? parseInt(savedCount, 10) : 25;
+  });
+   const [dataSource, setDataSource] = useState<DataSource>(() => {
+    const savedSource = localStorage.getItem('dataSource');
+    return (savedSource as DataSource) || 'Gemini';
   });
 
   useEffect(() => {
     localStorage.setItem('stockCount', String(stockCount));
   }, [stockCount]);
 
+   useEffect(() => {
+    localStorage.setItem('dataSource', dataSource);
+  }, [dataSource]);
+
   const loadStockData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setComparisonList([]); // Clear comparison on refresh
     try {
       const [stockData, ratesData] = await Promise.all([
-          fetchHighGrowthStocks(stockCount),
+          fetchHighGrowthStocks(stockCount, dataSource),
           fetchConversionRates()
       ]);
       
@@ -96,6 +109,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
 
       const processedData: ProcessedStockData[] = stockData.map((stock, index) => ({
         ...stock,
+        initialRank: index + 1,
         momentumScore: momentumScores[index]?.score ?? 50,
         volatilityLabel: volatilities[index]?.label ?? 'Medium',
       }));
@@ -110,7 +124,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [stockCount]);
+  }, [stockCount, dataSource]);
 
   useEffect(() => {
     loadStockData();
@@ -128,7 +142,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     if (sortConfig.key === key) {
         direction = sortConfig.direction === 'asc' ? 'dsc' : 'asc';
     } else {
-        direction = ['price', 'symbol'].includes(key) ? 'asc' : 'dsc';
+        direction = ['initialRank', 'price', 'symbol'].includes(key) ? 'asc' : 'dsc';
     }
     setSortConfig({ key, direction });
   };
@@ -169,6 +183,36 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     return { avg6mGrowth, marketSentiment, topGainer };
   }, [sortedStocks]);
 
+  const handleExportCsv = () => {
+    if (sortedStocks) {
+      exportToCsv(sortedStocks, `us-stocks-${new Date().toISOString().split('T')[0]}.csv`);
+    }
+  };
+  
+  const handleToggleCompare = (symbol: string) => {
+    setComparisonList(prev => 
+      prev.includes(symbol) 
+        ? prev.filter(s => s !== symbol) 
+        : [...prev, symbol]
+    );
+  };
+
+  const handleToggleAllCompare = () => {
+    if (!sortedStocks) return;
+    const allSymbols = sortedStocks.map(s => s.symbol);
+    if (comparisonList.length === allSymbols.length) {
+      setComparisonList([]);
+    } else {
+      setComparisonList(allSymbols);
+    }
+  };
+  
+  const handleCompareClick = () => {
+    if (stocks) {
+      const stocksToCompare = stocks.filter(s => comparisonList.includes(s.symbol));
+      setModalContent({ comparisonList: stocksToCompare });
+    }
+  };
 
   const renderContent = () => {
     if (isLoading && !stocks) {
@@ -179,8 +223,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
     }
     if (sortedStocks) {
       return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-            {isLoading ? <TableSkeleton /> : <StockTable stocks={sortedStocks} onSort={handleSort} sortConfig={sortConfig} onRowClick={setSelectedStock} currency={currency} rates={conversionRates} />}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden printable-table">
+            {isLoading ? <TableSkeleton /> : 
+              <StockTable 
+                stocks={sortedStocks} 
+                onSort={handleSort} 
+                sortConfig={sortConfig} 
+                onRowClick={(stock) => setModalContent({ stock })}
+                currency={currency} 
+                rates={conversionRates}
+                comparisonList={comparisonList}
+                onToggleCompare={handleToggleCompare}
+                onToggleAllCompare={handleToggleAllCompare}
+              />}
         </div>
       );
     }
@@ -190,40 +245,53 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currency }) => {
   return (
     <>
       <DashboardHeader stats={summaryStats} />
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-         <div className="relative w-full sm:w-72">
-             <input
-                type="text"
-                placeholder="Filter by name or symbol..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-             />
-             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-             </div>
+      <div className="flex flex-col xl:flex-row items-center justify-between gap-4 mb-6 no-print">
+         <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+            <div className="relative w-full sm:w-72">
+                 <input
+                    type="text"
+                    placeholder="Filter by name or symbol..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                 />
+                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                 </div>
+            </div>
+            <DataSourceSelector currentSource={dataSource} onSourceChange={setDataSource} />
          </div>
-         <div className="flex items-center gap-4">
+         <div className="flex items-center gap-4 w-full xl:w-auto justify-end">
+            {comparisonList.length >= 2 && (
+              <button
+                onClick={handleCompareClick}
+                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all transform hover:scale-105"
+              >
+                Compare ({comparisonList.length})
+              </button>
+            )}
             <StockCountSelector currentCount={stockCount} onCountChange={setStockCount} />
+            <ExportControls onExportCsv={handleExportCsv} />
              <button
                 onClick={loadStockData}
                 disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh Data"
+                className="flex items-center justify-center h-10 w-10 shrink-0 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4l1.5 1.5A9 9 0 0121.5 10.5M20 20l-1.5-1.5A9 9 0 002.5 13.5"/>
                 </svg>
-                {isLoading ? 'Refreshing...' : 'Refresh'}
             </button>
          </div>
       </div>
       
       {renderContent()}
 
-      {selectedStock && (
+      {modalContent && (
         <StockDetailModal 
-          stock={selectedStock} 
-          onClose={() => setSelectedStock(null)} 
+          stock={modalContent.stock}
+          comparisonList={modalContent.comparisonList}
+          onClose={() => setModalContent(null)} 
           currency={currency}
           rates={conversionRates}
         />

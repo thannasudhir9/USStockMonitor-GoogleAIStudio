@@ -11,11 +11,12 @@ export interface StockData {
 }
 
 export interface ProcessedStockData extends StockData {
+  initialRank: number;
   momentumScore: number;
   volatilityLabel: 'Low' | 'Medium' | 'High';
 }
 
-export type SortableKey = 'symbol' | 'price' | 'change1w' | 'change1m' | 'change3m' | 'change6m' | 'change1y';
+export type SortableKey = 'initialRank' | 'symbol' | 'price' | 'change1w' | 'change1m' | 'change3m' | 'change6m' | 'change1y';
 
 export type Page = 'dashboard' | 'features' | 'contact';
 
@@ -32,3 +33,5 @@ export interface ConversionRates {
     EUR: number;
     INR: number;
 }
+
+export type DataSource = 'Gemini' | 'Google Finance' | 'Yahoo Finance';

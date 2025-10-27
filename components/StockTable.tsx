@@ -9,6 +9,9 @@ interface StockTableProps {
   onRowClick: (stock: ProcessedStockData) => void;
   currency: Currency;
   rates: ConversionRates | null;
+  comparisonList: string[];
+  onToggleCompare: (symbol: string) => void;
+  onToggleAllCompare: () => void;
 }
 
 const ChangeIndicator: React.FC<{ value: number }> = ({ value }) => {
@@ -93,11 +96,12 @@ const SortableHeader: React.FC<{
 };
 
 
-const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onRowClick, currency, rates }) => {
+const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onRowClick, currency, rates, comparisonList, onToggleCompare, onToggleAllCompare }) => {
   const headers = [
-    { title: "#", align: 'left' },
+    { title: "#", align: 'left', key: 'initialRank' },
     { title: "Stock", align: 'left', key: 'symbol' },
     { title: `Price (${currency})`, align: 'right', key: 'price' },
+    { title: "Last Updated", align: 'right' },
     { title: "1W %", align: 'right', key: 'change1w' },
     { title: "1M %", align: 'right', key: 'change1m' },
     { title: "3M %", align: 'right', key: 'change3m' },
@@ -107,12 +111,23 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onR
     { title: "Volatility", align: 'right', tooltip: "A measure of the stock's price fluctuation. Higher means more risk." },
     { title: "Link", align: 'center' },
   ];
+  
+  const allSelected = stocks.length > 0 && comparisonList.length === stocks.length;
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-[1050px] text-left">
+      <table className="w-full min-w-[1200px] text-left">
         <thead className="border-b border-gray-200 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400">
           <tr>
+            <th scope="col" className="py-3 px-4 text-center">
+              <input 
+                type="checkbox"
+                className="form-checkbox h-4 w-4 rounded text-blue-600 bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500"
+                checked={allSelected}
+                onChange={onToggleAllCompare}
+                aria-label="Select all stocks"
+              />
+            </th>
             {headers.map((header) => {
               if (header.key) {
                 return <SortableHeader
@@ -137,27 +152,53 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onR
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
           {stocks.length > 0 ? (
-            stocks.map((stock, index) => (
+            stocks.map((stock) => (
               <tr 
                 key={stock.symbol} 
-                className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 cursor-pointer"
-                onClick={() => onRowClick(stock)}
+                className={`transition-colors duration-200 ${comparisonList.includes(stock.symbol) ? 'bg-blue-50 dark:bg-blue-900/50' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
               >
-                <td className="py-4 px-4 text-gray-500 dark:text-gray-400 font-medium">
-                    {index + 1}
+                <td className="py-4 px-4 text-center">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 rounded text-blue-600 bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500"
+                    checked={comparisonList.includes(stock.symbol)}
+                    onChange={() => onToggleCompare(stock.symbol)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${stock.name}`}
+                  />
                 </td>
-                <td className="py-4 px-4 font-medium text-gray-900 dark:text-white">
+                <td 
+                  className="py-4 px-4 text-gray-500 dark:text-gray-400 font-medium cursor-pointer"
+                  onClick={() => onRowClick(stock)}
+                >
+                    {stock.initialRank}
+                </td>
+                <td 
+                  className="py-4 px-4 font-medium text-gray-900 dark:text-white cursor-pointer"
+                  onClick={() => onRowClick(stock)}
+                >
                   <div className="text-base">{stock.symbol}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{stock.name}</div>
                 </td>
-                <td className="py-4 px-4 text-right font-mono text-gray-900 dark:text-white">{formatCurrency(stock.price, currency, rates)}</td>
-                <td className="py-4 px-4 text-right"><ChangeIndicator value={stock.change1w} /></td>
-                <td className="py-4 px-4 text-right"><ChangeIndicator value={stock.change1m} /></td>
-                <td className="py-4 px-4 text-right"><ChangeIndicator value={stock.change3m} /></td>
-                <td className="py-4 px-4 text-right"><ChangeIndicator value={stock.change6m} /></td>
-                <td className="py-4 px-4 text-right"><ChangeIndicator value={stock.change1y} /></td>
-                <td className="py-4 px-4 text-right"><MomentumMeter score={stock.momentumScore} /></td>
-                <td className="py-4 px-4 text-right"><VolatilityBadge label={stock.volatilityLabel} /></td>
+                <td 
+                  className="py-4 px-4 text-right font-mono text-gray-900 dark:text-white cursor-pointer"
+                  onClick={() => onRowClick(stock)}
+                >
+                  {formatCurrency(stock.price, currency, rates)}
+                </td>
+                <td 
+                  className="py-4 px-4 text-right text-sm text-gray-500 dark:text-gray-400 font-mono cursor-pointer"
+                  onClick={() => onRowClick(stock)}
+                >
+                  {stock.lastTradeDate || '-'}
+                </td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><ChangeIndicator value={stock.change1w} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><ChangeIndicator value={stock.change1m} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><ChangeIndicator value={stock.change3m} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><ChangeIndicator value={stock.change6m} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><ChangeIndicator value={stock.change1y} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><MomentumMeter score={stock.momentumScore} /></td>
+                <td className="py-4 px-4 text-right cursor-pointer" onClick={() => onRowClick(stock)}><VolatilityBadge label={stock.volatilityLabel} /></td>
                 <td className="py-4 px-4 text-center">
                     <a
                         href={`https://www.google.com/search?q=${encodeURIComponent(stock.name + ' stock')}`}
@@ -176,7 +217,7 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, onSort, sortConfig, onR
             ))
           ) : (
             <tr>
-              <td colSpan={headers.length} className="text-center py-12 text-gray-500 dark:text-gray-400">
+              <td colSpan={headers.length + 1} className="text-center py-12 text-gray-500 dark:text-gray-400">
                 No stocks found for your filter.
               </td>
             </tr>
